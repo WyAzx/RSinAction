@@ -1,6 +1,6 @@
 import datetime
 import tensorflow as tf
-from .wals import wals_model,simple_train
+from algorithm.wals import wals_model,simple_train
 from utils.data_helper import last_fm_data_loader
 
 class WRMFRecommender(object):
