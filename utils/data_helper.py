@@ -20,7 +20,7 @@ def last_fm_data_loader(filepath='../dataset/LastFM/user_artists.dat'):
             user_ux.append(user)
             ux += 1
             current_u = user
-        ix = pds_items.searchsorted(item)[0]
+        ix = pds_items.searchsorted(item)
         pv_ratings.append((ux, ix, timeonpg[1]))
 
     pv_ratings = np.asarray(pv_ratings)

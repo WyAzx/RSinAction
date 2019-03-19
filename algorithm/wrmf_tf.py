@@ -11,7 +11,7 @@ class WRMFRecommender(object):
     def build_model(self):
         pass
 
-    def eval_train(self):
+    def eval_train(self, train):
         tf.logging.info('Train Start: {:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now()))
         input_tensor, row_factor, col_factor, model = wals_model(train,
                                                                  40,
