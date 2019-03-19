@@ -17,7 +17,8 @@ class WRMFRecommender(object):
                                                                  40,
                                                                  0.1,
                                                                  0,
-                                                                 True)
+                                                                 True,
+                                                                 1)
 
         # factorize matrix
         session = simple_train(model, input_tensor, 10)
