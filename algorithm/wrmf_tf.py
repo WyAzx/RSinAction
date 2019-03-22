@@ -10,6 +10,23 @@ from evaluate.metrics import Metrics
 class WRMFRecommender(object):
 
     def __init__(self, config):
+        """
+        推荐模型初始化
+        :param config:
+            data: 训练数据
+            user_map: User映射文件
+            item_map: Item映射文件
+            weight_type: 权重矩阵初始化策略：['user'|'item']
+            weights: 是否加权
+            wt_type: 权重值线性或指数变换
+            obs_wt: 权重线性变换参数
+            feature_wt_exp: 权重指数变换参数
+            dim: 隐状态维度
+            unobs: 缺失值初始化大小
+            reg: 正则化参数
+            num_iterations: 迭代次数
+            save_path: 模型保存路径
+        """
         self.data = config['data']
         self.test = config['test']
         self.user_map = config['user_map']
@@ -31,10 +48,17 @@ class WRMFRecommender(object):
         self.col_wts = None
 
     def _build_model(self):
+        """
+        构建wALS算法计算图
+        :return:
+        """
 
         num_rows = self.data.shape[0]
         num_cols = self.data.shape[1]
 
+        # Weight矩阵初始化方式
+        # 1.User orientation 同一个User下Miss Value平均
+        # 2.Item orientation 同一个Item下Miss Value平均
         if self.weights:
             if self.weight_type == 'user':
                 self.row_wts = np.ones(num_rows)
@@ -47,7 +71,6 @@ class WRMFRecommender(object):
             self.input_tensor = tf.SparseTensor(indices=list(zip(self.data.row, self.data.col)),
                                                 values=(self.data.data).astype(np.float32),
                                                 dense_shape=self.data.shape)
-
             self.model = WALSModel(num_rows, num_cols, self.dim,
                                    unobserved_weight=self.unobs,
                                    regularization=self.reg,
@@ -58,6 +81,10 @@ class WRMFRecommender(object):
             self.col_factor = self.model.col_factors[0]
 
     def eval_train(self):
+        """
+        训练模型
+        :return:
+        """
         tf.logging.info('Train Start: {:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now()))
         self._build_model()
         self.sess = tf.Session(graph=self.input_tensor.graph)
@@ -85,6 +112,13 @@ class WRMFRecommender(object):
         return self.test.getrow(user_idx).indices
 
     def eval_recommend(self, user_idx, user_rated, k):
+        """
+        为特定用户生成推荐列表
+        :param user_idx: 用户id
+        :param user_rated: 用户已经评价/点击过的Item, 在推荐列表中排除
+        :param k: 推荐列表大小
+        :return: 用户推荐列表
+        """
         assert (self.output_col.shape[0] - len(user_rated)) >= k
         user_f = self.output_row[user_idx]
         pred_ratings = self.output_col.dot(user_f)
@@ -122,6 +156,15 @@ class WRMFRecommender(object):
 
     @staticmethod
     def _make_wts(data, wt_type, obs_wt, feature_wt_exp, axis):
+        """
+        计算缺失值初始化权重
+        :param data: 训练数据集
+        :param wt_type: 权重线性变换或指数变换
+        :param obs_wt: 线性变换参数
+        :param feature_wt_exp: 指数变换参数
+        :param axis: 数据累加维度
+        :return: 在一个维度上权重分布
+        """
         frac = np.array(1.0 / (data > 0.0).sum(axis))
         frac[np.ma.masked_invalid(frac).mask] = 0.0
         if wt_type == 1:
