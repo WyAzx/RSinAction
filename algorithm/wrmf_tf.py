@@ -3,12 +3,15 @@ import os
 import tensorflow as tf
 import numpy as np
 from tensorflow.contrib.factorization import WALSModel
-
+import sys
+sys.path.append("..")
+from evaluate.metrics import Metrics
 
 class WRMFRecommender(object):
 
     def __init__(self, config):
         self.data = config['data']
+        self.test = config['test']
         self.user_map = config['user_map']
         self.item_map = config['item_map']
         self.weight_type = config['weight_type']
@@ -78,8 +81,8 @@ class WRMFRecommender(object):
         self.output_col = self.col_factor.eval(session=self.sess)
         self.sess.close()
 
-    def eval_test(self):
-        pass
+    def eval_test(self, user_idx):
+        return self.test.getrow(user_idx).indices
 
     def eval_recommend(self, user_idx, user_rated, k):
         assert (self.output_col.shape[0] - len(user_rated)) >= k
@@ -92,6 +95,16 @@ class WRMFRecommender(object):
         recommended_items.reverse()
 
         return recommended_items
+
+    def eval_ranking(self, k):
+        rec_list = {}
+        test_list = {}
+        for ux in range(len(self.user_map)):
+            rated_items = self.data.getrow(ux).indices
+            recommended_items = self.eval_recommend(ux, rated_items, k)
+            rec_list[self.user_map[ux]] = recommended_items
+            test_list[self.user_map[ux]] = self.eval_test(ux)
+        self.measure = Metrics.rankingMeasure(test_list, rec_list, k)
 
     def save_model(self):
         if not os.path.exists(self.save_path):
