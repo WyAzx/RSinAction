@@ -3,17 +3,16 @@ import math
 
 
 class Metrics(object):
-    """docstring for Metrics"""
-
     def __init__(self):
         pass
 
     @staticmethod
     def hits(origin, predict):
         '''
-        origin-原始结果
-        predict-预测结果
-        返回每个用户命中的个数
+        计算命中个数
+        :param origin: 原始结果
+        :param predict: 预测结果
+        :return: 用户命中的个数字典
         '''
         hitCount = {}
         for user in origin.keys():
@@ -23,28 +22,42 @@ class Metrics(object):
         return hitCount
 
     @staticmethod
-    def MAP(origin, res, N):
+    def MAP(origin, predict, N):
+        '''
+        计算MAP(Mean Average Precision)
+        :param origin: 原始结果
+        :param predict: 预测结果
+        :param N: 为每个用户推荐物品的个数
+        :return: MAP
+        '''
         sum_prec = 0
-        for user in res.keys():
+        for user in predict.keys():
             if len(origin[user]) == 0:
                 continue
             hits = 0
             precision = 0
-            for n, item in enumerate(res[user]):
+            for n, item in enumerate(predict[user]):
                 if item in origin[user]:
                     hits += 1
                     precision += hits / (n + 1.0)
             sum_prec += precision / (min(len(origin[user]), N) + 0.0)
-        return sum_prec / (len(res))
+        return sum_prec / (len(predict))
 
     @staticmethod
-    def NDCG(origin, res, N):
+    def NDCG(origin, predict, N):
+        '''
+        计算NDCG(Normalized Discounted Cumulative Gain)
+        :param origin: 原始结果
+        :param predict: 预测结果
+        :param N: 为每个用户推荐物品的个数
+        :return: NDCG
+        '''
         sum_NDCG = 0
-        for user in res.keys():
+        for user in predict.keys():
             DCG = 0
             IDCG = 0
             #1 = related, 0 = unrelated
-            for n, item in enumerate(res[user]):
+            for n, item in enumerate(predict[user]):
                 if item in origin[user]:
                     DCG += 1.0/math.log(n+2)
             for n, item in enumerate(origin[user][:N]):
@@ -52,10 +65,16 @@ class Metrics(object):
             if IDCG == 0:
                 continue
             sum_NDCG += DCG / IDCG
-        return sum_NDCG / (len(res))
+        return sum_NDCG / (len(predict))
 
     @staticmethod
     def recall(hits, origin):
+        '''
+        计算召回率(Recall)
+        :param hits: 用户命中个数
+        :param origin: 原始结果
+        :return: 召回率
+        '''
         recallList = []
         for user in hits:
             if len(origin[user]) != 0:
@@ -65,6 +84,12 @@ class Metrics(object):
 
     @staticmethod
     def precision(hits, N):
+        '''
+        计算精确率(Precision)
+        :param hits: 用户命中个数
+        :param N: 为每个用户推荐物品的个数
+        :return: 精确率
+        '''
         if len(hits) == 0:
             return 0
         prec = sum([hits[user] for user in hits])
@@ -72,79 +97,42 @@ class Metrics(object):
 
     @staticmethod
     def F1(prec, recall):
+        '''
+        计算F1值
+        :param prec: 精确率
+        :param recall: 召回率
+        :return: F1值
+        '''
         if (prec + recall) != 0:
             return 2 * prec * recall / (prec + recall)
         else:
             return 0
 
     @staticmethod
-    def rankingMeasure(origin, predicted, N):
-        metrics = []
-        indicators = []
-        # if len(origin) != len(predicted):
-        #     print 'The Lengths of test set and predicted set are not match!'
-        #     exit(-1)
-        hits = Metrics.hits(origin, predicted)
-        prec = Metrics.precision(hits, N)
-        indicators.append('Precision:' + str(prec) + '\n')
-        recall = Metrics.recall(hits, origin)
-        indicators.append('Recall:' + str(recall) + '\n')
-        F1 = Metrics.F1(prec, recall)
-        indicators.append('F1:' + str(F1) + '\n')
-        MAP = Metrics.MAP(origin, predicted, N)
-        indicators.append('MAP:' + str(MAP) + '\n')
-        NDCG = Metrics.NDCG(origin, predicted, N)
-        indicators.append('NDCG:' + str(NDCG) + '\n')
-        # AUC = Metrics.AUC(origin,res,rawRes)
-        # measure.append('AUC:' + str(AUC) + '\n')
-        metrics.append('Top ' + str(N) + '\n')
-        metrics += indicators
-        for i in indicators:
-            print(i)
-        return metrics
-
-    @staticmethod
-    def ratingMeasure(res):
+    def rankingMeasure(origin, predict, N):
+        '''
+        计算TopN类型推荐算法评价指标
+        :param origin: 原始结果
+        :param predict: 预测结果
+        :param N: 为每个用户推荐物品的个数
+        :return: 包含评价指标的列表
+        '''
+        print('Top', N)
         measure = []
-        mae = Measure.MAE(res)
-        measure.append('MAE:'+str(mae)+'\n')
-        rmse = Measure.RMSE(res)
-        measure.append('RMSE:' + str(rmse)+'\n')
-
+        hits = Metrics.hits(origin, predict)
+        prec = Metrics.precision(hits, N)
+        measure.append(prec)
+        recall = Metrics.recall(hits, origin)
+        measure.append(recall)
+        F1 = Metrics.F1(prec, recall)
+        measure.append(F1)
+        MAP = Metrics.MAP(origin, predict, N)
+        measure.append(MAP)
+        NDCG = Metrics.NDCG(origin, predict, N)
+        measure.append(NDCG)
+        print('Precision:', prec)
+        print('Recall:', recall)
+        print('F1:', F1)
+        print('MAP:', MAP)
+        print('NDCG:', NDCG)
         return measure
-
-    @staticmethod
-    def mae(origin, predict):
-        """计算MAE
-        Args:
-            origin: list, 真实值
-            predict: list, 预测值
-        Return:
-            float MAE
-        """
-        error = 0
-        count = 0
-        for ori, pre in zip(origin, predict):
-            error += abs(ori - pre)
-            count += 1
-        if count == 0:
-            return error
-        return float(error) / count
-
-    @staticmethod
-    def rmse(origin, predict):
-        """计算RMSE
-        Args:
-            origin: list, 真实值
-            predict: list, 预测值
-        Return:
-            float RMSE
-        """
-        error = 0
-        count = 0
-        for ori, pre in zip(origin, predict):
-            error += (ori - pre) ** 2
-            count += 1
-        if count == 0:
-            return error
-        return math.sqrt(float(error) / count)

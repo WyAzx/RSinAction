@@ -109,6 +109,11 @@ class WRMFRecommender(object):
         self.sess.close()
 
     def eval_test(self, user_idx):
+        """
+        获取测试集特定用户的评价物品
+        :param user_idx: 用户id
+        :return: 测试集用户评价物品列表
+        """
         return self.test.getrow(user_idx).indices
 
     def eval_recommend(self, user_idx, user_rated, k):
@@ -130,15 +135,20 @@ class WRMFRecommender(object):
 
         return recommended_items
 
-    def eval_ranking(self, k):
+    def eval_ranking(self, N):
+        """
+        对模型进行评价
+        :param N: 为每个用户推荐物品的个数
+        :return:
+        """
         rec_list = {}
         test_list = {}
         for ux in range(len(self.user_map)):
             rated_items = self.data.getrow(ux).indices
-            recommended_items = self.eval_recommend(ux, rated_items, k)
+            recommended_items = self.eval_recommend(ux, rated_items, N)
             rec_list[self.user_map[ux]] = recommended_items
             test_list[self.user_map[ux]] = self.eval_test(ux)
-        self.measure = Metrics.rankingMeasure(test_list, rec_list, k)
+        self.measure = Metrics.rankingMeasure(test_list, rec_list, N)
 
     def save_model(self):
         if not os.path.exists(self.save_path):
