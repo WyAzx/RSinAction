@@ -1,8 +1,8 @@
 from algorithm.wrmf_tf import WRMFRecommender
-from utils.data_helper import last_fm_data_loader
+from utils.data_helper import data_helper
 from config import WRMF_TF_DEFAULT_CONFIG as config
 
-users, items, train, test = last_fm_data_loader('dataset/LastFM/user_artists.dat')
+users, items, train, test = data_helper('dataset/LastFM/user_artists.dat')
 config['data'] = train
 config['test'] = test
 config['user_map'] = users

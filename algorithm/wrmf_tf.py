@@ -88,20 +88,24 @@ class WRMFRecommender(object):
         tf.logging.info('Train Start: {:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now()))
         self._build_model()
         self.sess = tf.Session(graph=self.input_tensor.graph)
+        self.saver = tf.train.Saver([self.row_factor, self.col_factor])
 
         with self.input_tensor.graph.as_default():
+            self.load_tf_model()
             row_update_op = self.model.update_row_factors(sp_input=self.input_tensor)[1]
             col_update_op = self.model.update_col_factors(sp_input=self.input_tensor)[1]
 
             self.sess.run(self.model.initialize_op)
             self.sess.run(self.model.worker_init)
-            for _ in range(self.num_iterations):
+            for i in range(self.num_iterations):
                 self.sess.run(self.model.row_update_prep_gramian_op)
                 self.sess.run(self.model.initialize_row_update_op)
                 self.sess.run(row_update_op)
                 self.sess.run(self.model.col_update_prep_gramian_op)
                 self.sess.run(self.model.initialize_col_update_op)
                 self.sess.run(col_update_op)
+                if i % 1 == 0:
+                    self.save_tf_model(i)
         tf.logging.info('Train Finish: {:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now()))
 
         self.output_row = self.row_factor.eval(session=self.sess)
@@ -149,6 +153,25 @@ class WRMFRecommender(object):
             rec_list[self.user_map[ux]] = recommended_items
             test_list[self.user_map[ux]] = self.eval_test(ux)
         self.measure = Metrics.rankingMeasure(test_list, rec_list, N)
+
+    def save_tf_model(self, step):
+        """
+        保存tf模型
+        :param step: 全局总步数
+        :return:
+        """
+        self.saver.save(self.sess, os.path.join(self.save_path, 'tf'), global_step=step)
+
+    def load_tf_model(self):
+        """
+        加载tf模型
+        :return:
+        """
+        ckpt = tf.train.get_checkpoint_state(self.save_path)
+        if ckpt and ckpt.model_checkpoint_path:
+            self.saver.restore(self.sess, ckpt.model_checkpoint_path)
+        else:
+            print("No checkpoint file.")
 
     def save_model(self):
         if not os.path.exists(self.save_path):
