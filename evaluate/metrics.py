@@ -109,7 +109,7 @@ class Metrics(object):
             return 0
 
     @staticmethod
-    def rankingMeasure(origin, predict, N):
+    def ranking_measure(origin, predict, N):
         '''
         计算TopN类型推荐算法评价指标
         :param origin: 原始结果

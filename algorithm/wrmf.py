@@ -154,7 +154,7 @@ class WRMFRecommender(object):
             recommended_items = self.eval_recommend(ux, N)
             rec_list[self.user_map[ux]] = recommended_items
             test_list[self.user_map[ux]] = self.eval_test(ux)
-        self.measure = Metrics.rankingMeasure(test_list, rec_list, N)
+        self.measure = Metrics.ranking_measure(test_list, rec_list, N)
 
     def save_tf_model(self, step):
         """
@@ -208,11 +208,12 @@ class WRMFRecommender(object):
         if os.path.exists(os.path.join(self.save_path, 'row.npy')) and os.path.exists(os.path.join(self.save_path, 'col.npy')):
             self.load_model()
         else:
-            self.output_row = np.random.rand(num_rows, self.dim)
-            self.output_col = np.random.rand(num_cols, self.dim)
+            self.output_row = np.random.rand(num_rows, self.dim) # 对应论文中的X
+            self.output_col = np.random.rand(num_cols, self.dim) # 对应论文中的Y
         iteration = 0
         while iteration < self.num_iterations:
             print ('iteration:',iteration)
+            self.loss = 0
             YtY = self.output_col.T.dot(self.output_col)
             I = np.ones(num_cols)
             for uid in range(len(self.user_map)):
@@ -228,13 +229,14 @@ class WRMFRecommender(object):
                     H[iid]+=r_ui
                     P_u[iid]=1
                     error = (P_u[iid]-self.output_row[uid].dot(self.output_col[iid]))
+                    self.loss += error ** 2
                 C_u = coo_matrix((val,(pos,pos)),shape=(num_cols,num_cols))
                 # 计算权重Wu，Wu = (YtCuY + lambda * itemIdx) ^ -1
                 Au = (YtY+np.dot(self.output_col.T, C_u.dot(self.output_col))+self.reg * np.eye(self.dim))
                 Wu = np.linalg.inv(Au)
                 # 更新Xu，这里即X[uid], Xu = Wu*YtCuPu
                 self.output_row[uid] = np.dot(Wu,(self.output_col.T*H).dot(P_u))
-
+                break
 
             XtX = self.output_row.T.dot(self.output_row)
             I = np.ones(num_rows)
@@ -255,7 +257,12 @@ class WRMFRecommender(object):
                 Wi = np.linalg.inv(Ai)
                 # 更新Yi, Yi = Wi*XtCiPi
                 self.output_col[iid]=np.dot(Wi, (self.output_row.T*H).dot(P_i))
+                break
+
             iteration += 1
+            self.loss += self.reg * ((self.output_row * self.output_row).sum() + (self.output_col * self.output_col).sum())
+            print('Loss:', self.loss)
+            self.eval_ranking(self.topn)
             if iteration % 2 == 0:
                 self.save_model()
 
