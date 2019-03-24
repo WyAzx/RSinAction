@@ -2,6 +2,7 @@ import datetime
 import os
 import tensorflow as tf
 import numpy as np
+from scipy.sparse import coo_matrix
 from tensorflow.contrib.factorization import WALSModel
 import sys
 sys.path.append("..")
@@ -82,7 +83,7 @@ class WRMFRecommender(object):
             self.row_factor = self.model.row_factors[0]
             self.col_factor = self.model.col_factors[0]
 
-    def eval_train(self):
+    def eval_train_tf(self):
         """
         训练模型
         :return:
@@ -175,6 +176,10 @@ class WRMFRecommender(object):
             print("No checkpoint file.")
 
     def save_model(self):
+        """
+        使用numpy保存隐矩阵
+        :return:
+        """
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
         np.save(os.path.join(self.save_path, 'user'), self.user_map)
@@ -183,10 +188,76 @@ class WRMFRecommender(object):
         np.save(os.path.join(self.save_path, 'col'), self.output_col)
 
     def load_model(self):
-        self.user_map = np.load(os.path.join(self.save_path, 'user'))
-        self.item_map = np.load(os.path.join(self.save_path, 'item'))
-        self.output_row = np.load(os.path.join(self.save_path, 'row'))
-        self.output_col = np.load(os.path.join(self.save_path, 'col'))
+        """
+        加载隐矩阵
+        :return:
+        """
+        self.user_map = np.load(os.path.join(self.save_path, 'user.npy'))
+        self.item_map = np.load(os.path.join(self.save_path, 'item.npy'))
+        self.output_row = np.load(os.path.join(self.save_path, 'row.npy'))
+        self.output_col = np.load(os.path.join(self.save_path, 'col.npy'))
+
+    def eval_train(self):
+        """
+        传统方法进行训练
+        :return:
+        """
+        print('Start training...')
+        num_rows = self.data.shape[0]
+        num_cols = self.data.shape[1]
+        if os.path.exists(os.path.join(self.save_path, 'row.npy')) and os.path.exists(os.path.join(self.save_path, 'col.npy')):
+            self.load_model()
+        else:
+            self.output_row = np.random.rand(num_rows, self.dim)
+            self.output_col = np.random.rand(num_cols, self.dim)
+        iteration = 0
+        while iteration < self.num_iterations:
+            print ('iteration:',iteration)
+            YtY = self.output_col.T.dot(self.output_col)
+            I = np.ones(num_cols)
+            for uid in range(len(self.user_map)):
+                #C_u = np.ones(self.data.getSize(self.recType))
+                val = []
+                H = np.ones(num_cols)
+                pos = []
+                P_u = np.zeros(num_cols)
+                for iid in self.data.getrow(uid).indices:
+                    r_ui = float(self.data.getrow(uid).getcol(iid).toarray()[0][0])
+                    pos.append(iid)
+                    val.append(r_ui)
+                    H[iid]+=r_ui
+                    P_u[iid]=1
+                    error = (P_u[iid]-self.output_row[uid].dot(self.output_col[iid]))
+                C_u = coo_matrix((val,(pos,pos)),shape=(num_cols,num_cols))
+                # 计算权重Wu，Wu = (YtCuY + lambda * itemIdx) ^ -1
+                Au = (YtY+np.dot(self.output_col.T, C_u.dot(self.output_col))+self.reg * np.eye(self.dim))
+                Wu = np.linalg.inv(Au)
+                # 更新Xu，这里即X[uid], Xu = Wu*YtCuPu
+                self.output_row[uid] = np.dot(Wu,(self.output_col.T*H).dot(P_u))
+
+
+            XtX = self.output_row.T.dot(self.output_row)
+            I = np.ones(num_rows)
+            for iid in range(len(self.item_map)):
+                P_i = np.zeros(num_rows)
+                H = np.ones(num_rows)
+                val = []
+                pos = []
+                for uid in self.data.getcol(iid).indices:
+                    r_ui = float(self.data.getrow(uid).getcol(iid).toarray()[0][0])
+                    pos.append(uid)
+                    val.append(r_ui)
+                    H[uid] += r_ui
+                    P_i[uid] = 1
+                C_i = coo_matrix((val, (pos, pos)),shape=(num_rows,num_rows))
+                # 计算权重Wi，Wi = (XtCiX + lambda * userIdx) ^ -1
+                Ai = (XtX+np.dot(self.output_row.T,C_i.dot(self.output_row))+self.reg*np.eye(self.dim))
+                Wi = np.linalg.inv(Ai)
+                # 更新Yi, Yi = Wi*XtCiPi
+                self.output_col[iid]=np.dot(Wi, (self.output_row.T*H).dot(P_i))
+            iteration += 1
+            if iteration % 2 == 0:
+                self.save_model()
 
     @staticmethod
     def _make_wts(data, wt_type, obs_wt, feature_wt_exp, axis):
