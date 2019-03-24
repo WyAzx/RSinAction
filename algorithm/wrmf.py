@@ -236,7 +236,6 @@ class WRMFRecommender(object):
                 Wu = np.linalg.inv(Au)
                 # 更新Xu，这里即X[uid], Xu = Wu*YtCuPu
                 self.output_row[uid] = np.dot(Wu,(self.output_col.T*H).dot(P_u))
-                break
 
             XtX = self.output_row.T.dot(self.output_row)
             I = np.ones(num_rows)
@@ -257,7 +256,6 @@ class WRMFRecommender(object):
                 Wi = np.linalg.inv(Ai)
                 # 更新Yi, Yi = Wi*XtCiPi
                 self.output_col[iid]=np.dot(Wi, (self.output_row.T*H).dot(P_i))
-                break
 
             iteration += 1
             self.loss += self.reg * ((self.output_row * self.output_row).sum() + (self.output_col * self.output_col).sum())
