@@ -5,58 +5,65 @@ from sklearn.model_selection import train_test_split
 
 def data_helper(filepath='../dataset/LastFM/user_artists.dat'):
     '''
-    加载和划分数据集
+    构建数据集、划分数据集
     :param filepath: 文件路径
-    :return: 用户、物品、训练集、测试集
+    :return: 用户、物品、训练集、验证集、测试集
     '''
-    users, pds_items, df_items, pv_ratings, ux = data_loader(filepath)
-    train, test = data_split(df_items, pv_ratings, ux)
+    users, items, data_set = data_loader(filepath)
+    train, val, test = data_split(data_set, users.size, items.size)
 
-    return users, pds_items.values, train, test
+    return users, items, train, val, test
 
 
 def data_loader(filepath):
     '''
-    加载数据集
+    加载数据，构建数据集
     :param filepath: 文件路径
-    :return: 用户列表、内容ID列表、排序过的内容ID列表、点击量、用户数量
+    :return: 用户列表、内容列表、数据集
     '''
     df = pd.read_csv(filepath, sep='\t')
-    df_items = pd.DataFrame({'contentId': df.artistID.unique()})
-    df_sorted_items = df_items.sort_values('contentId').reset_index()
-    pds_items = df_sorted_items.contentId
-    df_user_items = df.groupby(['userID', 'artistID']).agg({'weight': 'sum'})
+    items = pd.DataFrame({'contentId': df.artistID.unique()}).sort_values('contentId').reset_index(drop=True)
+    user_items_weight = df.groupby(['userID', 'artistID']).agg({'weight': 'sum'})
+
     current_u = -1
     ux = -1
-    pv_ratings = []
-    user_ux = []
-    for timeonpg in df_user_items.itertuples():
-        user = timeonpg[0][0]
-        item = timeonpg[0][1]
+    users = []
+    data_set = []
+
+    # data_set由[用户index、内容index、权重]构成
+    for data in user_items_weight.itertuples():
+        user = data[0][0]
+        item = data[0][1]
+        weight = data[1]
+
         if user != current_u:
-            user_ux.append(user)
+            users.append(user)
             ux += 1
             current_u = user
-        ix = pds_items.searchsorted(item)
-        pv_ratings.append((ux, ix, timeonpg[1]))
+        ix = items[items['contentId'] == item].index.values[0]
+        data_set.append((ux, ix, weight))
 
-    pv_ratings = np.asarray(pv_ratings)
-    user_ux = np.asarray(user_ux)
 
-    return user_ux, df_items, pds_items, pv_ratings, ux
+    users = np.asarray(users)
+    items = np.asarray(items)
+    data_set = np.asarray(data_set)
 
-def data_split(df_items, pv_ratings, ux):
+    return users, items, data_set
+
+def data_split(data_set, n_users, n_items):
     '''
-    数据集划分
-    :param df_items: 内容列表
-    :param pv_ratings: 点击量
-    :param ux: 用户索引
-    :return: 训练集、测试集
+    划分数据集
+    :param data_set: 数据集
+    :param n_users: 用户数量
+    :param n_items: 内容数量
+    :return:
     '''
-    train, test = train_test_split(pv_ratings, test_size=0.05, random_state=42)
-    train = create_sparse(train, ux+1, df_items.size)
-    test = create_sparse(test, ux+1, df_items.size)
-    return train, test
+    train, test = train_test_split(data_set, test_size=0.05, random_state=42)
+    train, val = train_test_split(train, test_size=0.05, random_state=42)
+    train = create_sparse(train, n_users, n_items)
+    val = create_sparse(val, n_users, n_items)
+    test = create_sparse(test, n_users, n_items)
+    return train, val, test
 
 def create_sparse(data, n_users, n_items):
     '''

@@ -26,9 +26,10 @@ class WRMFRecommender(object):
             reg: 正则化参数
             num_iterations: 迭代次数
             save_path: 模型保存路径
+            topn: 推荐结果个数
         """
         self.data = config['data']
-        self.test = config['test']
+        self.test = config['val']
         self.user_map = config['user_map']
         self.item_map = config['item_map']
         self.weight_type = config['weight_type']
@@ -41,6 +42,7 @@ class WRMFRecommender(object):
         self.reg = config['reg']
         self.num_iterations = config['num_iterations']
         self.save_path = config['save_path']
+        self.topn = config['topn']
 
         self.output_row = None
         self.output_col = None
@@ -104,12 +106,12 @@ class WRMFRecommender(object):
                 self.sess.run(self.model.col_update_prep_gramian_op)
                 self.sess.run(self.model.initialize_col_update_op)
                 self.sess.run(col_update_op)
-                if i % 1 == 0:
-                    self.save_tf_model(i)
+                self.output_row = self.row_factor.eval(session=self.sess)
+                self.output_col = self.col_factor.eval(session=self.sess)
+                if i % 2 == 0:
+                    self.eval_ranking(self.topn)
+                    # self.save_tf_model(i)
         tf.logging.info('Train Finish: {:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now()))
-
-        self.output_row = self.row_factor.eval(session=self.sess)
-        self.output_col = self.col_factor.eval(session=self.sess)
         self.sess.close()
 
     def eval_test(self, user_idx):
@@ -120,14 +122,14 @@ class WRMFRecommender(object):
         """
         return self.test.getrow(user_idx).indices
 
-    def eval_recommend(self, user_idx, user_rated, k):
+    def eval_recommend(self, user_idx, k):
         """
         为特定用户生成推荐列表
         :param user_idx: 用户id
-        :param user_rated: 用户已经评价/点击过的Item, 在推荐列表中排除
         :param k: 推荐列表大小
         :return: 用户推荐列表
         """
+        user_rated = self.data.getrow(user_idx).indices
         assert (self.output_col.shape[0] - len(user_rated)) >= k
         user_f = self.output_row[user_idx]
         pred_ratings = self.output_col.dot(user_f)
@@ -148,8 +150,7 @@ class WRMFRecommender(object):
         rec_list = {}
         test_list = {}
         for ux in range(len(self.user_map)):
-            rated_items = self.data.getrow(ux).indices
-            recommended_items = self.eval_recommend(ux, rated_items, N)
+            recommended_items = self.eval_recommend(ux, N)
             rec_list[self.user_map[ux]] = recommended_items
             test_list[self.user_map[ux]] = self.eval_test(ux)
         self.measure = Metrics.rankingMeasure(test_list, rec_list, N)

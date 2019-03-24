@@ -8,6 +8,7 @@ WRMF_TF_DEFAULT_CONFIG = {
     'dim': 40,
     'unobs': 0.1,
     'reg': 0.1,
+    'topn': 10,
     'num_iterations': 10,
     'save_path': './save_model/wrmf/',
 }
